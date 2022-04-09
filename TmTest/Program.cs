@@ -24,9 +24,6 @@ namespace TmTest
 
         private static readonly Stats Stats = new Stats();
 
-        private const string ConfigFileName = "config.json";
-        private static Config config;
-
         static async Task Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
@@ -52,10 +49,11 @@ namespace TmTest
                     WorkingDirectory = fullPath.DirectoryName
                 };
 
-                config = JsonSerializer.Deserialize<Config>(File.ReadAllText(ConfigFileName));
                 mapNumberString = args[1];
-                Stats.ParticipantId = config.Id;
-                Stats.Map = int.Parse(mapNumberString);
+                int mapNum = int.Parse(mapNumberString);
+
+                Stats.ParticipantId = await GetParticipantIdAsync(mapNum);
+                Stats.Map = mapNum;
 
                 SetupTimer(args[2]);
 
@@ -70,7 +68,6 @@ namespace TmTest
 
                 WaitForTrackmaniaToExit();
 
-                HandleParticipantIdIncrement();
             }
             catch (Exception e)
             {
@@ -79,11 +76,6 @@ namespace TmTest
             finally
             {
                 Stats.EndTime = DateTime.Now;
-
-                using (var configFileStream = File.OpenWrite(ConfigFileName))
-                {
-                    await JsonSerializer.SerializeAsync(configFileStream, config);
-                }
 
                 using (var context = new StatsDbContext())
                 {
@@ -170,12 +162,24 @@ namespace TmTest
             }
         }
 
-        private static void HandleParticipantIdIncrement()
+        private static async Task<int> GetParticipantIdAsync(int mapNum)
         {
-            if (mapNumberString == "1")
+            int participantId;
+            using (var context = new StatsDbContext())
             {
-                config.Id++;
+                if (mapNum == 0)
+                {
+                    var player = new Player
+                    {
+                        StartedAt = DateTime.Now
+                    };
+                    await context.AddAsync(player);
+                    await context.SaveChangesAsync();
+                }
+                participantId = context.Players.Count();
             }
+
+            return participantId;
         }
     }
 }
