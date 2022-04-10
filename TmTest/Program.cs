@@ -77,7 +77,7 @@ namespace TmTest
                 if (isTrackmaniaShutdownByTimer)
                 {
                     MessageBox.Show("Czas upłynął / Time has elapsed", "Czas upłynął / Time has elapsed", MessageBoxButtons.OK,
-                                MessageBoxIcon.Information);
+                                MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
                 }
             }
             catch (Exception e)
