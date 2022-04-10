@@ -11,7 +11,8 @@ namespace TmTest
             Database?.EnsureCreated();
         }
 
-        DbSet<Stats> Stats { get; set; }
+        public DbSet<Stats> Stats { get; set; }
+        public DbSet<Player> Players { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -20,9 +21,14 @@ namespace TmTest
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<Stats>().Property<int>("PrimaryKey")
+            const string primaryKeyName = "PrimaryKey";
+            modelBuilder.Entity<Stats>().Property<int>(primaryKeyName)
                 .ValueGeneratedOnAdd();
-            modelBuilder.Entity<Stats>().HasKey("PrimaryKey");
+            modelBuilder.Entity<Stats>().HasKey(primaryKeyName);
+            
+            modelBuilder.Entity<Player>().Property(x => x.Id)
+                            .ValueGeneratedOnAdd();
+            modelBuilder.Entity<Player>().HasKey(x => x.Id);
         }
     }
 }

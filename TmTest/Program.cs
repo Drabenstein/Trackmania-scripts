@@ -4,10 +4,11 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using System.Threading.Tasks;
 using System.Timers;
+using System.Windows.Forms;
 using AutoHotkey.Interop;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Timer = System.Timers.Timer;
 
@@ -22,21 +23,22 @@ namespace TmTest
         private static string mapNumberString;
         private static TimeSpan timeout;
 
-        private static readonly Stats Stats = new Stats();
+        private static volatile bool isTrackmaniaShutdownByTimer = false;
 
-        private const string ConfigFileName = "config.json";
-        private static Config config;
+        private static readonly Stats Stats = new Stats();
 
         static async Task Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
-                .WriteTo.File("Logs/TmTest.log", rollingInterval: RollingInterval.Day)
+                .WriteTo.File("Logs/TmTest-.log", rollingInterval: RollingInterval.Day)
                 .WriteTo.Console()
                 .CreateLogger();
 
             try
             {
+                ConsoleWindowManager.Hide();
+
                 if (args.Length != 3)
                 {
                     throw new ArgumentException(
@@ -52,10 +54,11 @@ namespace TmTest
                     WorkingDirectory = fullPath.DirectoryName
                 };
 
-                config = JsonSerializer.Deserialize<Config>(File.ReadAllText(ConfigFileName));
                 mapNumberString = args[1];
-                Stats.ParticipantId = config.Id;
-                Stats.Map = int.Parse(mapNumberString);
+                int mapNum = int.Parse(mapNumberString);
+
+                Stats.ParticipantId = await GetParticipantIdAsync(mapNum);
+                Stats.Map = mapNum;
 
                 SetupTimer(args[2]);
 
@@ -69,25 +72,25 @@ namespace TmTest
                 SetForegroundWindow(process.MainWindowHandle);
 
                 WaitForTrackmaniaToExit();
+                Log.Information("Trackmania finished");
 
-                HandleParticipantIdIncrement();
+                if (isTrackmaniaShutdownByTimer)
+                {
+                    MessageBox.Show("Czas upłynął / Time has elapsed", "Czas upłynął / Time has elapsed", MessageBoxButtons.OK,
+                                MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                }
             }
             catch (Exception e)
             {
-                Log.Error("Error occured during {@Stats}. Error message: {@Exception}", Stats, e.Message);
+                Log.Error("Error {@Exception} occured during {@Stats}.", e, Stats);
             }
             finally
             {
                 Stats.EndTime = DateTime.Now;
 
-                using (var configFileStream = File.OpenWrite(ConfigFileName))
-                {
-                    await JsonSerializer.SerializeAsync(configFileStream, config);
-                }
-
                 using (var context = new StatsDbContext())
                 {
-                    await context.AddAsync(Stats);
+                    await context.Stats.AddAsync(Stats);
                     await context.SaveChangesAsync();
                 }
 
@@ -99,6 +102,7 @@ namespace TmTest
         private static void TimerOnElapsed(object sender, ElapsedEventArgs e)
         {
             Stats.TimerTriggered = true;
+            isTrackmaniaShutdownByTimer = true;
             KillTrackmania(false);
             timer.Stop();
         }
@@ -170,12 +174,30 @@ namespace TmTest
             }
         }
 
-        private static void HandleParticipantIdIncrement()
+        private static async Task<int> GetParticipantIdAsync(int mapNum)
         {
-            if (mapNumberString == "1")
+            int participantId;
+            using (var context = new StatsDbContext())
             {
-                config.Id++;
+                Player player;
+                if (mapNum == 0)
+                {
+                    player = new Player
+                    {
+                        StartedAt = DateTime.Now
+                    };
+                    await context.AddAsync(player);
+                    await context.SaveChangesAsync();
+                }
+                else
+                {
+                    player = await context.Players.OrderByDescending(x => x.Id).FirstAsync();
+                }
+
+                participantId = player.Id;
             }
+
+            return participantId;
         }
     }
 }
