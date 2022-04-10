@@ -18,12 +18,13 @@ Send, {Right}   ;select "directory up"
 Send, {Down}    ;select "Challenges\" directory
 Send, {Enter}   ;click "Challenges\" directory
 Send, {Enter}   ;click "My Challenges\" directory
+Send, {Enter}   ;click "tracks\" directory
 Send, {Right}   ;select "directory up"
 Send, {Down 1}  ;select track - 1 = tutorial, 2 = easy, 3 = medium, 4 = hard
 Send, {Enter}   ;click on first track to select it as level to play
 Send, {Right 8} ;select play map button - 8 = tutorial, 5 = easy, 3 = medium, 1 = hard
 Send, {Enter}   ;click "Play"
-Sleep, 2500     ;load track, user should see screen on which he is forced to press any key to start race
+Sleep, 3000     ;load track, user should see screen on which he is forced to press any key to start race
 Send, {Enter}   ;start race
 BlockInput, MouseMoveOff    ;unblock mouse input
 SendPipeMessage("START")
@@ -43,3 +44,4 @@ Backspace::
 Return
 
 Delete::
+Return

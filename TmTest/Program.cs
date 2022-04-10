@@ -4,10 +4,11 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using System.Threading.Tasks;
 using System.Timers;
+using System.Windows.Forms;
 using AutoHotkey.Interop;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Timer = System.Timers.Timer;
 
@@ -22,18 +23,22 @@ namespace TmTest
         private static string mapNumberString;
         private static TimeSpan timeout;
 
+        private static volatile bool isTrackmaniaShutdownByTimer = false;
+
         private static readonly Stats Stats = new Stats();
 
         static async Task Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
-                .WriteTo.File("Logs/TmTest.log", rollingInterval: RollingInterval.Day)
+                .WriteTo.File("Logs/TmTest-.log", rollingInterval: RollingInterval.Day)
                 .WriteTo.Console()
                 .CreateLogger();
 
             try
             {
+                ConsoleWindowManager.Hide();
+
                 if (args.Length != 3)
                 {
                     throw new ArgumentException(
@@ -67,11 +72,17 @@ namespace TmTest
                 SetForegroundWindow(process.MainWindowHandle);
 
                 WaitForTrackmaniaToExit();
+                Log.Information("Trackmania finished");
 
+                if (isTrackmaniaShutdownByTimer)
+                {
+                    MessageBox.Show("Czas upłynął / Time has elapsed", "Czas upłynął / Time has elapsed", MessageBoxButtons.OK,
+                                MessageBoxIcon.Information);
+                }
             }
             catch (Exception e)
             {
-                Log.Error("Error occured during {@Stats}. Error message: {@Exception}", Stats, e.Message);
+                Log.Error("Error {@Exception} occured during {@Stats}.", e, Stats);
             }
             finally
             {
@@ -79,7 +90,7 @@ namespace TmTest
 
                 using (var context = new StatsDbContext())
                 {
-                    await context.AddAsync(Stats);
+                    await context.Stats.AddAsync(Stats);
                     await context.SaveChangesAsync();
                 }
 
@@ -91,6 +102,7 @@ namespace TmTest
         private static void TimerOnElapsed(object sender, ElapsedEventArgs e)
         {
             Stats.TimerTriggered = true;
+            isTrackmaniaShutdownByTimer = true;
             KillTrackmania(false);
             timer.Stop();
         }
@@ -167,16 +179,22 @@ namespace TmTest
             int participantId;
             using (var context = new StatsDbContext())
             {
+                Player player;
                 if (mapNum == 0)
                 {
-                    var player = new Player
+                    player = new Player
                     {
                         StartedAt = DateTime.Now
                     };
                     await context.AddAsync(player);
                     await context.SaveChangesAsync();
                 }
-                participantId = context.Players.Count();
+                else
+                {
+                    player = await context.Players.OrderByDescending(x => x.Id).FirstAsync();
+                }
+
+                participantId = player.Id;
             }
 
             return participantId;
